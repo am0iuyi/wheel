@@ -1,0 +1,18 @@
+{% extends 'wheel/base.html' %}
+
+{% block content %}
+
+<body style="background-color: #FFDAB9;">
+</body>
+<div class="text-center">
+    <h1>Добро пожаловать в Колесо Фортуны!</h1>
+    {% if user.is_authenticated %}
+        <p>Перейдите на страницу колеса, чтобы начать играть.</p>
+        <a href="{% url 'wheel' %}" class="btn btn-primary">Крутить колесо</a>
+    {% else %}
+        <p>Войдите или зарегистрируйтесь, чтобы начать играть.</p>
+        <a href="{% url 'login' %}" class="btn btn-primary">Войти</a>
+        <a href="{% url 'register' %}" class="btn btn-secondary">Регистрация</a>
+    {% endif %}
+</div>
+{% endblock %}

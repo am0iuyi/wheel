@@ -1,0 +1,254 @@
+{% extends 'wheel/base.html' %}
+
+{% block content %}
+<body style="background-color: #FFDAB9;">
+</body>
+<div class="wheel-container">
+    <h1>Испытайте свою удачу!</h1>
+    <p>Вращайте колесо и выигрывайте призы</p>
+
+    <div class="wheel-wrapper">
+        <div class="pointer"></div>
+        <div class="wheel">
+            <canvas id="wheelCanvas" width="400" height="400"></canvas>
+        </div>
+    </div>
+
+    <button id="spinBtn" class="spin-btn">КРУТИТЬ</button>
+    <div class="result" id="result"></div>
+</div>
+{% endblock %}
+
+{% block scripts %}
+<script>
+    const canvas = document.getElementById('wheelCanvas');
+    const ctx = canvas.getContext('2d');
+    const spinBtn = document.getElementById('spinBtn');
+    const resultDiv = document.getElementById('result');
+
+    const segments = [
+        { color: '#F0F8FF', label: '5', value: 5 },
+        { color: '#ADD8E6', label: '10', value: 10 },
+        { color: '#F0F8FF', label: '2', value: 2 },
+        { color: '#ADD8E6', label: '20', value: 20 },
+        { color: '#F0F8FF', label: '1', value: 1 },
+        { color: '#ADD8E6', label: '50', value: 50 },
+        { color: '#F0F8FF', label: '3', value: 3 },
+        { color: '#ADD8E6', label: '100', value: 100 }
+    ];
+
+    let currentRotation = 0;
+    let isSpinning = false;
+    let winningSegment = null;
+
+    function drawWheel() {
+        const centerX = canvas.width / 2;
+        const centerY = canvas.height / 2;
+        const radius = Math.min(centerX, centerY) - 10;
+        const arc = Math.PI * 2 / segments.length;
+
+        ctx.clearRect(0, 0, canvas.width, canvas.height);
+
+        // Draw segments
+        for (let i = 0; i < segments.length; i++) {
+            ctx.beginPath();
+            ctx.fillStyle = segments[i].color;
+            ctx.moveTo(centerX, centerY);
+            ctx.arc(
+                centerX, centerY, radius,
+                currentRotation + i * arc,
+                currentRotation + (i + 1) * arc,
+                false
+            );
+            ctx.fill();
+            ctx.closePath();
+
+            // Draw text
+            ctx.save();
+            ctx.translate(centerX, centerY);
+            ctx.rotate(currentRotation + i * arc + arc / 2);
+            ctx.textAlign = 'right';
+            ctx.fillStyle = '#000';
+            ctx.font = 'bold 16px Arial';
+            ctx.fillText(segments[i].label, radius - 10, 5);
+            ctx.restore();
+        }
+
+        // Draw center circle
+        ctx.beginPath();
+        ctx.fillStyle = '#2980b9'; // dark-blue
+        ctx.arc(centerX, centerY, 20, 0, Math.PI * 2);
+        ctx.fill();
+        ctx.closePath();
+    }
+
+    function getCookie(name) {
+        let cookieValue = null;
+        if (document.cookie && document.cookie !== '') {
+            const cookies = document.cookie.split(';');
+            for (let i = 0; i < cookies.length; i++) {
+                const cookie = cookies[i].trim();
+                if (cookie.substring(0, name.length + 1) === (name + '=')) {
+                    cookieValue = decodeURIComponent(cookie.substring(name.length + 1));
+                    break;
+                }
+            }
+        }
+        return cookieValue;
+    }
+
+    function spinWheel() {
+        if (isSpinning) return;
+
+        isSpinning = true;
+        spinBtn.disabled = true;
+        resultDiv.textContent = '';
+        winningSegment = null;
+
+        // Random rotation (5-10 full rotations plus segment offset)
+        const spinDegrees = 1800 + Math.random() * 1800;
+        const spinDuration = 3000; // 3 seconds
+
+        let startTime = null;
+
+        function animate(currentTime) {
+            if (!startTime) startTime = currentTime;
+            const elapsedTime = currentTime - startTime;
+            const progress = Math.min(elapsedTime / spinDuration, 1);
+            const easeOut = 1 - Math.pow(1 - progress, 3);
+
+            currentRotation = easeOut * spinDegrees * (Math.PI / 180);
+            drawWheel();
+
+            if (progress < 1) {
+                requestAnimationFrame(animate);
+            } else {
+                // Определяем выигрышный сегмент
+                const normalizedRotation = currentRotation % (Math.PI * 2);
+                const segmentAngle = (Math.PI * 2) / segments.length;
+
+                // Учитываем, что указатель находится вверху (12 часов)
+                // Нужно вычислить, какой сегмент находится напротив указателя
+                let winningIndex = Math.floor(((Math.PI * 1.5) - normalizedRotation) / segmentAngle) % segments.length;
+                winningIndex = (winningIndex + segments.length) % segments.length;
+
+                winningSegment = segments[winningIndex];
+                finishSpin();
+            }
+        }
+
+        requestAnimationFrame(animate);
+    }
+
+    function finishSpin() {
+        if (!winningSegment) return;
+
+        // Получаем CSRF токен
+        const csrftoken = getCookie('csrftoken');
+
+        // Отправляем AJAX запрос на сервер с выигрышным значением
+        $.ajax({
+            url: '{% url "spin" %}',
+            method: 'POST',
+            headers: {
+                "X-CSRFToken": csrftoken
+            },
+            data: {
+                'win_amount': winningSegment.value
+            },
+            success: function(response) {
+                resultDiv.textContent = `Вы выиграли ${winningSegment.value} монет!`;
+                spinBtn.disabled = false;
+                isSpinning = false;
+
+                // Обновляем количество монет в навбаре
+                $('.navbar-text').text(`Монеты: ${response.total_coins}`);
+            },
+            error: function(xhr) {
+                console.error("Error:", xhr.responseText);
+                resultDiv.textContent = 'Ошибка: ' + xhr.responseText;
+                spinBtn.disabled = false;
+                isSpinning = false;
+            }
+        });
+    }
+
+    spinBtn.addEventListener('click', spinWheel);
+    drawWheel();
+</script>
+
+<style>
+    :root {
+        --blue: #3498db;
+        --dark-blue: #2980b9;
+        --beige: #f5e7d3;
+        --dark-beige: #e6d2b5;
+        --tan: #A52A2A;
+    }
+
+    .wheel-container {
+        max-width: 900px;
+        margin: 30px auto;
+        padding: 20px;
+        text-align: center;
+    }
+
+    .wheel-wrapper {
+        position: relative;
+        width: 400px;
+        height: 400px;
+        margin: 50px auto;
+    }
+
+    .wheel {
+        width: 100%;
+        height: 100%;
+        border-radius: 50%;
+        position: relative;
+        overflow: hidden;
+        box-shadow: 0 0 10px rgba(0,0,0,0.2);
+    }
+
+     .pointer {
+        position: absolute;
+        top: -10px; /* Располагаем выше верхней границы колеса */
+        left: 50%;
+        transform: translateX(-50%);
+        width: 0;
+        height: 0;
+        border-left: 15px solid transparent;
+        border-right: 15px solid transparent;
+        border-top: 30px solid #e74c3c;
+        z-index: 10;
+    }
+
+    .spin-btn {
+        margin-top: 30px;
+        padding: 12px 30px;
+        font-size: 18px;
+        background-color: var(--blue);
+        color: white;
+        border: none;
+        border-radius: 5px;
+        cursor: pointer;
+        transition: background-color 0.3s;
+    }
+
+    .spin-btn:hover {
+        background-color: var(--dark-blue);
+    }
+
+    .spin-btn:disabled {
+        background-color: #95a5a6;
+        cursor: not-allowed;
+    }
+
+    .result {
+        margin-top: 30px;
+        font-size: 24px;
+        font-weight: bold;
+        min-height: 30px;
+        color: var(--tan);
+    }
+</style>
+{% endblock %}

@@ -1,0 +1,53 @@
+{% extends 'wheel/base.html' %}
+
+{% block content %}
+<h2 class="mb-4">Магазин</h2>
+<div class="row">
+    {% for item in items %}
+<div class="col-md-4 mb-4">
+    <div class="card">
+        <!-- Проверьте этот тег img -->
+        <img src="{{ item.image.url }}" class="card-img-top" alt="{{ item.name }}">
+        <div class="card-body">
+            <h5 class="card-title">{{ item.name }}</h5>
+            <p class="card-text">{{ item.description }}</p>
+            <p class="card-text"><strong>Цена: {{ item.price }} монет</strong></p>
+            <button class="btn btn-primary buy-btn" data-item-id="{{ item.id }}">
+                Купить
+            </button>
+        </div>
+    </div>
+</div>
+{% endfor %}
+</div>
+{% endblock %}
+
+{% block scripts %}
+<script>
+    $(document).ready(function() {
+        $('.buy-btn').click(function() {
+            const itemId = $(this).data('item-id');
+            const btn = $(this);
+            
+            $.ajax({
+                url: `/buy/${itemId}/`,
+                method: 'POST',
+                data: {
+                    csrfmiddlewaretoken: '{{ csrf_token }}'
+                },
+                success: function(response) {
+                    if (response.success) {
+                        alert('Покупка успешна!');
+                        $('.navbar-text').text(`Монеты: ${response.new_balance}`);
+                    } else {
+                        alert(response.error);
+                    }
+                },
+                error: function() {
+                    alert('Ошибка при покупке');
+                }
+            });
+        });
+    });
+</script>
+{% endblock %}
